@@ -16,6 +16,7 @@ module Guard
   # * Terminal Notifier
   # * Terminal Title
   # * Tmux
+  # * Stumpish
   #
   # Please see the documentation of each notifier for more information about the requirements
   # and configuration possibilities.
@@ -50,6 +51,7 @@ module Guard
     require 'guard/notifiers/terminal_title'
     require 'guard/notifiers/tmux'
     require 'guard/notifiers/file_notifier'
+    require 'guard/notifiers/stumpish'
 
     extend self
 
@@ -68,7 +70,8 @@ module Guard
       [[:emacs,             ::Guard::Notifier::Emacs]],
       [[:tmux,              ::Guard::Notifier::Tmux]],
       [[:terminal_title,    ::Guard::Notifier::TerminalTitle]],
-      [[:file,              ::Guard::Notifier::FileNotifier]]
+      [[:file,              ::Guard::Notifier::FileNotifier]],
+      [[:stumpish,          ::Guard::Notifier::Stumpish]]
     ]
 
     # Get the available notifications.
