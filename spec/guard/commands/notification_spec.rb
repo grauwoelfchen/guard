@@ -8,8 +8,9 @@ describe 'Guard::Interactor::NOTIFICATION' do
 
   describe '#perform' do
     it 'toggles the Guard notifier' do
-      ::Guard::Notifier.should_receive(:toggle)
+      expect(::Guard::Notifier).to receive(:toggle)
       Pry.run_command 'notification'
     end
   end
+
 end
