@@ -14,6 +14,7 @@ require 'guard/notifiers/rb_notifu'
 require 'guard/notifiers/terminal_notifier'
 require 'guard/notifiers/terminal_title'
 require 'guard/notifiers/tmux'
+require 'guard/notifiers/stumpish'
 
 module Guard
 
@@ -71,7 +72,7 @@ module Guard
       { emacs: Emacs },
       { tmux: Tmux },
       { terminal_title: TerminalTitle },
-      { file: FileNotifier }
+      { file: FileNotifier },
       { stumpish: Stumpish }
     ]
 
