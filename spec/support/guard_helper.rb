@@ -1,27 +1,29 @@
 shared_examples_for 'interactor enabled' do
   it 'enables the interactor' do
-    described_class::Interactor.should_receive(:new)
-    described_class.setup_interactor
+    expect(Guard::Interactor).to receive(:new)
+
+    Guard.send :interactor
   end
 end
 
 shared_examples_for 'interactor disabled' do
   it 'disables the interactor' do
-    described_class::Interactor.should_not_receive(:new)
-    described_class.setup_interactor
+    expect(Guard::Interactor).to_not receive(:new)
+
+    Guard.send :interactor
   end
 end
 
 shared_examples_for 'notifier enabled' do
   it 'enables the notifier' do
-    described_class::Notifier.should_receive(:turn_on)
-    described_class.setup_notifier
+    expect(Guard::Notifier).to receive(:turn_on)
+    Guard.send :_setup_notifier
   end
 end
 
 shared_examples_for 'notifier disabled' do
   it 'disables the notifier' do
-    described_class::Notifier.should_receive(:turn_off)
-    described_class.setup_notifier
+    expect(Guard::Notifier).to receive(:turn_off)
+    Guard.send :_setup_notifier
   end
 end

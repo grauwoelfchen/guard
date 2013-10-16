@@ -1,105 +1,106 @@
 require 'spec_helper'
 
 describe Guard::Notifier::Libnotify do
-
-  let(:fake_libnotify) do
-    Class.new do
-      def self.show(options) end
-    end
-  end
+  let(:notifier) { described_class.new }
 
   before do
-    subject.stub(:require)
-    stub_const 'Libnotify', fake_libnotify
+    described_class.stub(:require_gem_safely).and_return(true)
+    stub_const 'Libnotify', double
+  end
+
+  describe '.supported_hosts' do
+    it { expect(described_class.supported_hosts).to eq %w[linux freebsd openbsd sunos solaris] }
   end
 
   describe '.available?' do
-    context 'without the silent option' do
-      it 'shows an error message when not available on the host OS' do
-        ::Guard::UI.should_receive(:error).with 'The :libnotify notifier runs only on Linux, FreeBSD, OpenBSD and Solaris.'
-        RbConfig::CONFIG.should_receive(:[]).with('host_os').and_return 'darwin'
-        subject.available?
-      end
+    context 'host is not supported' do
+      before { RbConfig::CONFIG.stub(:[]).with('host_os').and_return('mswin') }
 
-      it 'shows an error message when the gem cannot be loaded' do
-        RbConfig::CONFIG.should_receive(:[]).with('host_os').and_return 'linux'
-        ::Guard::UI.should_receive(:error).with "Please add \"gem 'libnotify'\" to your Gemfile and run Guard with \"bundle exec\"."
-        subject.should_receive(:require).with('libnotify').and_raise LoadError
-        subject.available?
+      it 'do not require libnotify' do
+        expect(described_class).to_not receive(:require_gem_safely)
+
+        expect(described_class).to_not be_available
       end
     end
 
-    context 'with the silent option' do
-      it 'does not show an error message when not available on the host OS' do
-        ::Guard::UI.should_not_receive(:error).with 'The :libnotify notifier runs only on Linux, FreeBSD, OpenBSD and Solaris.'
-        RbConfig::CONFIG.should_receive(:[]).with('host_os').and_return 'darwin'
-        subject.available?(true)
-      end
+    context 'host is supported' do
+      before { RbConfig::CONFIG.stub(:[]).with('host_os').and_return('linux') }
 
-      it 'does not show an error message when the gem cannot be loaded' do
-        RbConfig::CONFIG.should_receive(:[]).with('host_os').and_return 'linux'
-        ::Guard::UI.should_not_receive(:error).with "Please add \"gem 'libnotify'\" to your Gemfile and run Guard with \"bundle exec\"."
-        subject.should_receive(:require).with('libnotify').and_raise LoadError
-        subject.available?(true)
+      it 'requires libnotify' do
+        expect(described_class).to receive(:require_gem_safely) { true }
+
+        expect(described_class).to be_available
       end
     end
   end
 
-  describe '.notify' do
-    it 'requires the library again' do
-      subject.should_receive(:require).with('libnotify').and_return true
-      subject.notify('success', 'Welcome', 'Welcome to Guard', '/tmp/welcome.png', { })
+  describe '#notify' do
+    context 'with options passed at initialization' do
+      let(:notifier) { described_class.new(title: 'Hello') }
+
+      it 'uses these options by default' do
+        expect(::Libnotify).to receive(:show).with(
+          transient: false,
+          append:    true,
+          timeout:   3,
+          urgency:   :low,
+          summary:   'Hello',
+          body:      'Welcome to Guard',
+          icon_path: '/tmp/welcome.png'
+        )
+
+        notifier.notify('Welcome to Guard', image: '/tmp/welcome.png')
+      end
+
+      it 'overwrites object options with passed options' do
+        expect(::Libnotify).to receive(:show).with(
+          transient: false,
+          append:    true,
+          timeout:   3,
+          urgency:   :low,
+          summary:   'Welcome',
+          body:      'Welcome to Guard',
+          icon_path: '/tmp/welcome.png'
+        )
+
+        notifier.notify('Welcome to Guard', title: 'Welcome', image: '/tmp/welcome.png')
+      end
     end
 
     context 'without additional options' do
       it 'shows the notification with the default options' do
-        ::Libnotify.should_receive(:show).with({
-            :transient => false,
-            :append    => true,
-            :timeout   => 3,
-            :urgency   => :low,
-            :summary   => 'Welcome',
-            :body      => 'Welcome to Guard',
-            :icon_path => '/tmp/welcome.png'
-        })
-        subject.notify('success', 'Welcome', 'Welcome to Guard', '/tmp/welcome.png', { })
+        expect(::Libnotify).to receive(:show).with(
+          transient: false,
+          append:    true,
+          timeout:   3,
+          urgency:   :low,
+          summary:   'Welcome',
+          body:      'Welcome to Guard',
+          icon_path: '/tmp/welcome.png'
+        )
+
+        notifier.notify('Welcome to Guard', title: 'Welcome', image: '/tmp/welcome.png')
       end
     end
 
     context 'with additional options' do
       it 'can override the default options' do
-        ::Libnotify.should_receive(:show).with({
-            :transient => true,
-            :append    => false,
-            :timeout   => 5,
-            :urgency   => :critical,
-            :summary   => 'Waiting',
-            :body      => 'Waiting for something',
-            :icon_path => '/tmp/wait.png'
-        })
-        subject.notify('pending', 'Waiting', 'Waiting for something', '/tmp/wait.png', {
-            :transient => true,
-            :append    => false,
-            :timeout   => 5,
-            :urgency   => :critical
-        })
-      end
+        expect(::Libnotify).to receive(:show).with(
+          transient: true,
+          append:    false,
+          timeout:   5,
+          urgency:   :critical,
+          summary:   'Waiting',
+          body:      'Waiting for something',
+          icon_path: '/tmp/wait.png'
+        )
 
-      it 'cannot override the core options' do
-        ::Libnotify.should_receive(:show).with({
-            :transient => false,
-            :append    => true,
-            :timeout   => 3,
-            :urgency   => :normal,
-            :summary   => 'Failed',
-            :body      => 'Something failed',
-            :icon_path => '/tmp/fail.png'
-        })
-        subject.notify('failed', 'Failed', 'Something failed', '/tmp/fail.png', {
-            :summary   => 'Duplicate title',
-            :body      => 'Duplicate body',
-            :icon_path => 'Duplicate icon'
-        })
+        notifier.notify('Waiting for something', type: :pending, title: 'Waiting', image: '/tmp/wait.png',
+          transient: true,
+          append:    false,
+          timeout:   5,
+          urgency:   :critical
+        )
       end
     end
   end
