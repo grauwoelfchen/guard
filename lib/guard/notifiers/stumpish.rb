@@ -1,3 +1,5 @@
+require 'guard/notifiers/base'
+
 module Guard
   module Notifier
 
@@ -7,37 +9,40 @@ module Guard
     # @example Add the `:stumpish` notifier to your `Guardfile`
     # notification :stumpish
     #
-    module Stumpish
-      extend self
+    class Stumpish < Base
 
       # Default options for Stumpish
       DEFAULTS = {
         :failed  => 1,
-        :success => 2
+        :success => 2,
+        :pending => 3
       }
 
-      # Test if the stumpish notification option is available?
-      #
-      # @param [Boolean] silent true if no error messages should be shown
-      # @param [Hash] options notifier options
-      # @return [Boolean] the availability status
-      #
-      def available?(silent = false, options = {})
-        `which stumpish 2>&1` && $?.success?
+      def self.supported_hosts
+        %w[linux]
+      end
+
+      def self.available?(opts = {})
+        `which stumpish 2>&1` && $?.success? && super
       end
 
       # Notify using stumpish
       #
-      # @param [String] type the notification type. Either 'success', 'pending', 'failed' or 'notify'
-      # @param [String] title the notification title
       # @param [String] message the notification message body
-      # @param [String] image the path to the notification image
-      # @param [Hash] options additional notification library options
-      # @option options [String] color_location the location where to draw the color notification
-      # @option options [Boolean] display_message whether to display a message or not
-      #
-      def notify(type, title, message, image, options = { })
-        run_client "stumpish echo ^#{stumpish_color(type, options)}*'Guard:'" + description(type, message)
+      # @param [Hash] opts additional notification library options
+      # @option opts [String] type the notification type. Either 'success',
+      #   'pending', 'failed' or 'notify'
+      # @option opts [String] title the notification title
+      # @option opts [String] image the path to the notification image
+      # @option opts [Boolean] sticky make the notification sticky
+      # @option opts [String, Integer] priority specify an int or named key
+      #   (default is 0)
+      # @option opts [String] host the hostname or IP address to which to
+      #   send a remote notification
+      # @option opts [String] password the password used for remote
+      #   notifications
+      def notify(message, opts = { })
+        run_client "stumpish echo ^#{stumpish_color_with(opts)}*" + description(message, opts)
       end
 
       private
@@ -46,34 +51,34 @@ module Guard
         system(command + " >/dev/null 2>&1")
       end
 
-      def stumpish_color(type, options)
-        case type
-        when "success"
-          options[:success] || DEFAULTS[:success]
-        when "failed"
-          options[:failed]  || DEFAULTS[:failed]
-        when "pending"
-          options[:failed]  || DEFAULTS[:failed]
+      def stumpish_color_with(opts)
+        case opts[:type]
+        when :success
+          opts[:success] || DEFAULTS[:success]
+        when :failed
+          opts[:failed]  || DEFAULTS[:failed]
+        when :pending
+          opts[:pending] || DEFAULTS[:pending]
         else
-          options[:failed]  || DEFAULTS[:failed]
+          opts[:failed]  || DEFAULTS[:failed]
         end
       end
 
-      def description(type, message)
-        state = case type
-        when "success"
-          ":D"
-        when "failed"
-          ":'("
-        when "pending"
-          ":p"
-        else
-          ":)"
-        end
-        "\" test #{type} #{state} \n\n#{message}\""
+      def description(message, opts)
+        mood = \
+          case opts[:type]
+          when :success
+            ":D"
+          when :failed
+            ":'("
+          when :pending
+            ":p"
+          else
+            ":)"
+          end
+        "\" Guard: \n #{opts[:title]} #{opts[:type]} #{mood} \n #{message.gsub("\n", "\n ")}  \"\n"
       end
     end
 
   end
 end
-
