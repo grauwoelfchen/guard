@@ -1,130 +1,154 @@
 require 'spec_helper'
 
 describe Guard::Notifier::GrowlNotify do
-
-  let(:fake_growl_notify) do
-    Class.new do
-      def self.application_name; end
-      def self.send_notification(options) end
-    end
-  end
+  let(:notifier) { described_class.new }
 
   before do
-    subject.stub(:require)
-    stub_const 'GrowlNotify', fake_growl_notify
+    described_class.stub(:require_gem_safely).and_return(true)
+    stub_const 'GrowlNotify', double
+  end
+
+  describe '.supported_hosts' do
+    it { expect(described_class.supported_hosts).to eq %w[darwin] }
   end
 
   describe '.available?' do
-    context 'without the silent option' do
-      it 'shows an error message when not available on the host OS' do
-        ::Guard::UI.should_receive(:error).with 'The :growl_notify notifier runs only on Mac OS X.'
-        RbConfig::CONFIG.should_receive(:[]).with('host_os').and_return 'mswin'
-        subject.available?
-      end
+    context 'host is not supported' do
+      before { RbConfig::CONFIG.stub(:[]).with('host_os').and_return('mswin') }
 
-      it 'shows an error message when the gem cannot be loaded' do
-        RbConfig::CONFIG.should_receive(:[]).with('host_os').and_return 'darwin'
-        ::Guard::UI.should_receive(:error).with "Please add \"gem 'growl_notify'\" to your Gemfile and run Guard with \"bundle exec\"."
-        subject.should_receive(:require).with('growl_notify').and_raise LoadError
-        subject.available?
+      it 'do not require growl_notify' do
+        expect(described_class).to_not receive(:require_gem_safely)
+
+        expect(described_class).to_not be_available
       end
     end
 
-    context 'with the silent option' do
-      it 'does not show an error message when not available on the host OS' do
-        ::Guard::UI.should_not_receive(:error).with 'The :growl_notify notifier runs only on Mac OS X.'
-        RbConfig::CONFIG.should_receive(:[]).with('host_os').and_return 'mswin'
-        subject.available?(true)
+    context 'host is supported' do
+      before { RbConfig::CONFIG.stub(:[]).with('host_os').and_return('darwin') }
+
+      it 'requires growl_notify' do
+        expect(described_class).to receive(:require_gem_safely) { true }
+        expect(described_class).to receive(:_register!) { true }
+
+        expect(described_class).to be_available
       end
 
-      it 'does not show an error message when the gem cannot be loaded' do
-        RbConfig::CONFIG.should_receive(:[]).with('host_os').and_return 'darwin'
-        ::Guard::UI.should_not_receive(:error).with "Please add \"gem 'growl_notify'\" to your Gemfile and run Guard with \"bundle exec\"."
-        subject.should_receive(:require).with('growl_notify').and_raise LoadError
-        subject.available?(true)
+      context 'when the application name is not Guard' do
+        let(:config) { double('config') }
+
+        it 'does configure GrowlNotify' do
+          expect(RbConfig::CONFIG).to receive(:[]).with('host_os').and_return 'darwin'
+          expect(::GrowlNotify).to receive(:application_name).and_return nil
+          expect(::GrowlNotify).to receive(:config).and_yield config
+          expect(config).to receive(:notifications=).with ['success', 'pending', 'failed', 'notify']
+          expect(config).to receive(:default_notifications=).with 'notify'
+          expect(config).to receive(:application_name=).with 'Guard'
+
+          expect(described_class).to be_available
+        end
+      end
+
+      context 'when the application name is Guard' do
+        it 'does not configure GrowlNotify again' do
+          expect(RbConfig::CONFIG).to receive(:[]).with('host_os').and_return 'darwin'
+          expect(::GrowlNotify).to receive(:application_name).and_return 'Guard'
+          expect(::GrowlNotify).to_not receive(:config)
+
+          expect(described_class).to be_available
+        end
+      end
+
+      context '.require_gem_safely fails' do
+        before { expect(described_class).to receive(:require_gem_safely) { false } }
+
+        it 'requires growl_notify' do
+          expect(described_class).to_not receive(:_register!)
+
+          expect(described_class).to_not be_available
+        end
+      end
+
+      context '._register! fails' do
+        before do
+          expect(described_class).to receive(:require_gem_safely) { true }
+          expect(described_class).to receive(:_register!) { false }
+        end
+
+        it 'requires growl_notify' do
+          expect(described_class).to_not be_available
+        end
       end
     end
-
-    context 'when the application name is not Guard' do
-      let(:config) { mock('config') }
-
-      it 'does configure GrowlNotify' do
-        RbConfig::CONFIG.should_receive(:[]).with('host_os').and_return 'darwin'
-        ::GrowlNotify.should_receive(:application_name).and_return nil
-        ::GrowlNotify.should_receive(:config).and_yield config
-        config.should_receive(:notifications=).with ['success', 'pending', 'failed', 'notify']
-        config.should_receive(:default_notifications=).with 'notify'
-        config.should_receive(:application_name=).with 'Guard'
-        subject.available?
-      end
-    end
-
-    context 'when the application name is Guard' do
-      it 'does not configure GrowlNotify again' do
-        RbConfig::CONFIG.should_receive(:[]).with('host_os').and_return 'darwin'
-        ::GrowlNotify.should_receive(:application_name).and_return 'Guard'
-        ::GrowlNotify.should_not_receive(:config)
-        subject.available?
-      end
-    end
-
   end
 
-  describe '.nofify' do
-    it 'requires the library again' do
-      subject.should_receive(:require).with('growl_notify').and_return true
-      subject.notify('success', 'Welcome', 'Welcome to Guard', '/tmp/welcome.png', { })
+  describe '.available?' do
+  end
+
+  describe '#notify' do
+    context 'with options passed at initialization' do
+      let(:notifier) { described_class.new(title: 'Hello') }
+
+      it 'uses these options by default' do
+        expect(::GrowlNotify).to receive(:send_notification).with(
+          sticky:           false,
+          priority:         0,
+          application_name: 'Guard',
+          with_name:        'success',
+          title:            'Hello',
+          description:      'Welcome to Guard',
+          icon:             '/tmp/welcome.png'
+        )
+
+        notifier.notify('Welcome to Guard', type: :success, image: '/tmp/welcome.png')
+      end
+
+      it 'overwrites object options with passed options' do
+        expect(::GrowlNotify).to receive(:send_notification).with(
+          sticky:           false,
+          priority:         0,
+          application_name: 'Guard',
+          with_name:        'success',
+          title:            'Welcome',
+          description:      'Welcome to Guard',
+          icon:             '/tmp/welcome.png'
+        )
+
+        notifier.notify('Welcome to Guard', type: :success, title: 'Welcome', image: '/tmp/welcome.png')
+      end
     end
 
     context 'without additional options' do
       it 'shows the notification with the default options' do
-        ::GrowlNotify.should_receive(:send_notification).with({
-            :sticky           => false,
-            :priority         => 0,
-            :application_name => 'Guard',
-            :with_name        => 'success',
-            :title            => 'Welcome',
-            :description      => 'Welcome to Guard',
-            :icon             => '/tmp/welcome.png'
-        })
-        subject.notify('success', 'Welcome', 'Welcome to Guard', '/tmp/welcome.png', { })
+        expect(::GrowlNotify).to receive(:send_notification).with(
+          sticky:           false,
+          priority:         0,
+          application_name: 'Guard',
+          with_name:        'success',
+          title:            'Welcome',
+          description:      'Welcome to Guard',
+          icon:             '/tmp/welcome.png'
+        )
+
+        notifier.notify('Welcome to Guard', type: :success, title: 'Welcome', image: '/tmp/welcome.png')
       end
     end
 
     context 'with additional options' do
       it 'can override the default options' do
-        ::GrowlNotify.should_receive(:send_notification).with({
-            :sticky           => true,
-            :priority         => -2,
-            :application_name => 'Guard',
-            :with_name        => 'pending',
-            :title            => 'Waiting',
-            :description      => 'Waiting for something',
-            :icon             => '/tmp/wait.png'
-        })
-        subject.notify('pending', 'Waiting', 'Waiting for something', '/tmp/wait.png', {
-            :sticky   => true,
-            :priority => -2
-        })
-      end
+        expect(::GrowlNotify).to receive(:send_notification).with(
+          sticky:           true,
+          priority:         -2,
+          application_name: 'Guard',
+          with_name:        'pending',
+          title:            'Waiting',
+          description:      'Waiting for something',
+          icon:             '/tmp/wait.png'
+        )
 
-      it 'cannot override the core options' do
-        ::GrowlNotify.should_receive(:send_notification).with({
-            :sticky           => false,
-            :priority         => 0,
-            :application_name => 'Guard',
-            :with_name        => 'failed',
-            :title            => 'Failed',
-            :description      => 'Something failed',
-            :icon             => '/tmp/fail.png'
-        })
-        subject.notify('failed', 'Failed', 'Something failed', '/tmp/fail.png', {
-            :application_name => 'Guard CoffeeScript',
-            :with_name        => 'custom',
-            :title            => 'Duplicate title',
-            :description      => 'Duplicate description',
-            :icon             => 'Duplicate icon'
-        })
+        notifier.notify('Waiting for something', type: :pending, title: 'Waiting', image: '/tmp/wait.png',
+          sticky:   true,
+          priority: -2
+        )
       end
     end
   end

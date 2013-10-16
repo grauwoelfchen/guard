@@ -1,105 +1,113 @@
 require 'spec_helper'
 
 describe Guard::Notifier do
+  let(:gntp)  { { name: :gntp, options: { color: true } } }
+  let(:growl) { { name: :growl, options: {} } }
+  let(:gntp_object) { double('GNTP').as_null_object }
+  let(:growl_object) { double('Growl').as_null_object }
 
   describe '.turn_on' do
     context 'with configured notifications' do
       before do
-        Guard::Notifier.notifications = [{ :name => :gntp, :options => { } }]
+        Guard::Notifier.notifiers = [gntp]
       end
 
       it 'shows the used notifications' do
-        Guard::UI.should_receive(:info).with 'Guard uses GNTP to send notifications.'
+        expect(Guard::UI).to receive(:info).with 'Guard is using GNTP to send notifications.'
+
         Guard::Notifier.turn_on
       end
 
       it 'enables the notifications' do
         Guard::Notifier.turn_on
-        Guard::Notifier.should be_enabled
+
+        expect(Guard::Notifier).to be_enabled
       end
 
       it 'turns on the defined notification module' do
-        ::Guard::Notifier::GNTP.should_receive(:turn_on)
+        expect(Guard::Notifier::GNTP).to receive(:turn_on)
+
         Guard::Notifier.turn_on
       end
     end
 
-    context 'without configured notifications' do
+    context 'without configured notifiers' do
       before do
-        Guard::Notifier.notifications = []
+        Guard::Notifier.clear_notifiers
       end
 
       context 'when notifications are globally enabled' do
         before do
-          ::Guard.options = { }
-          ::Guard.options.should_receive(:[]).with(:notify).and_return true
+          expect(::Guard.options).to receive(:[]).with(:notify).and_return true
         end
 
         it 'tries to add each available notification silently' do
-          Guard::Notifier.should_receive(:add_notification).with(:gntp, { }, true).and_return false
-          Guard::Notifier.should_receive(:add_notification).with(:growl, { }, true).and_return false
-          Guard::Notifier.should_receive(:add_notification).with(:growl_notify, { }, true).and_return false
-          Guard::Notifier.should_receive(:add_notification).with(:terminal_notifier, { }, true).and_return false
-          Guard::Notifier.should_receive(:add_notification).with(:libnotify, { }, true).and_return false
-          Guard::Notifier.should_receive(:add_notification).with(:notifysend, { }, true).and_return false
-          Guard::Notifier.should_receive(:add_notification).with(:notifu, { }, true).and_return false
-          Guard::Notifier.should_receive(:add_notification).with(:emacs, { }, true).and_return false
-          Guard::Notifier.should_receive(:add_notification).with(:terminal_title, { }, true).and_return false
-          Guard::Notifier.should_receive(:add_notification).with(:tmux, { }, true).and_return false
-          Guard::Notifier.should_receive(:add_notification).with(:file, { }, true).and_return false
+          expect(Guard::Notifier).to receive(:add_notifier).with(:gntp, silent: true).and_return false
+          expect(Guard::Notifier).to receive(:add_notifier).with(:growl, silent: true).and_return false
+          expect(Guard::Notifier).to receive(:add_notifier).with(:growl_notify, silent: true).and_return false
+          expect(Guard::Notifier).to receive(:add_notifier).with(:terminal_notifier, silent: true).and_return false
+          expect(Guard::Notifier).to receive(:add_notifier).with(:libnotify, silent: true).and_return false
+          expect(Guard::Notifier).to receive(:add_notifier).with(:notifysend, silent: true).and_return false
+          expect(Guard::Notifier).to receive(:add_notifier).with(:notifu, silent: true).and_return false
+          expect(Guard::Notifier).to receive(:add_notifier).with(:emacs, silent: true).and_return false
+          expect(Guard::Notifier).to receive(:add_notifier).with(:terminal_title, silent: true).and_return false
+          expect(Guard::Notifier).to receive(:add_notifier).with(:tmux, silent: true).and_return false
+          expect(Guard::Notifier).to receive(:add_notifier).with(:file, silent: true).and_return false
+
           Guard::Notifier.turn_on
         end
 
         it 'adds only the first notification per group' do
-          Guard::Notifier.should_receive(:add_notification).with(:gntp, { }, true).and_return false
-          Guard::Notifier.should_receive(:add_notification).with(:growl, { }, true).and_return false
-          Guard::Notifier.should_receive(:add_notification).with(:growl_notify, { }, true).and_return true
-          Guard::Notifier.should_not_receive(:add_notification).with(:terminal_notifier, { }, true)
-          Guard::Notifier.should_not_receive(:add_notification).with(:libnotify, { }, true)
-          Guard::Notifier.should_not_receive(:add_notification).with(:notifysend, { }, true)
-          Guard::Notifier.should_not_receive(:add_notification).with(:notifu, { }, true)
-          Guard::Notifier.should_receive(:add_notification).with(:emacs, { }, true)
-          Guard::Notifier.should_receive(:add_notification).with(:terminal_title, { }, true)
-          Guard::Notifier.should_receive(:add_notification).with(:tmux, { }, true)
-          Guard::Notifier.should_receive(:add_notification).with(:file, { }, true)
+          expect(Guard::Notifier).to receive(:add_notifier).with(:gntp, silent: true).and_return false
+          expect(Guard::Notifier).to receive(:add_notifier).with(:growl, silent: true).and_return false
+          expect(Guard::Notifier).to receive(:add_notifier).with(:growl_notify, silent: true).and_return true
+          expect(Guard::Notifier).to_not receive(:add_notifier).with(:terminal_notifier, silent: true)
+          expect(Guard::Notifier).to_not receive(:add_notifier).with(:libnotify, silent: true)
+          expect(Guard::Notifier).to_not receive(:add_notifier).with(:notifysend, silent: true)
+          expect(Guard::Notifier).to_not receive(:add_notifier).with(:notifu, silent: true)
+          expect(Guard::Notifier).to receive(:add_notifier).with(:emacs, silent: true)
+          expect(Guard::Notifier).to receive(:add_notifier).with(:terminal_title, silent: true)
+          expect(Guard::Notifier).to receive(:add_notifier).with(:tmux, silent: true)
+          expect(Guard::Notifier).to receive(:add_notifier).with(:file, silent: true)
+
           Guard::Notifier.turn_on
         end
 
         it 'does enable the notifications when a library is available' do
-          Guard::Notifier.should_receive(:add_notification) do
-            Guard::Notifier.notifications = [{ :name => :gntp, :options => { } }]
+          Guard::Notifier.stub(:add_notifier) do
+            Guard::Notifier.notifiers = [gntp]
             true
-          end.any_number_of_times
+          end
           Guard::Notifier.turn_on
-          Guard::Notifier.should be_enabled
+          expect(Guard::Notifier).to be_enabled
         end
 
         it 'does turn on the notification module for libraries that are available' do
-          ::Guard::Notifier::GNTP.should_receive(:turn_on)
-          Guard::Notifier.should_receive(:add_notification) do
-            Guard::Notifier.notifications = [{ :name => :gntp, :options => { } }]
+          Guard::Notifier.stub(:add_notifier) do
+            Guard::Notifier.notifiers = [{ name: :tmux, options: {} }]
             true
-          end.any_number_of_times
+          end
+          expect(Guard::Notifier::Tmux).to receive(:turn_on)
+
           Guard::Notifier.turn_on
         end
 
         it 'does not enable the notifications when no library is available' do
-          Guard::Notifier.should_receive(:add_notification).any_number_of_times.and_return false
+          Guard::Notifier.stub(:add_notifier).and_return false
           Guard::Notifier.turn_on
-          Guard::Notifier.should_not be_enabled
+          expect(Guard::Notifier).not_to be_enabled
         end
       end
 
       context 'when notifications are globally disabled' do
         before do
-          ::Guard.options = { }
-          ::Guard.options.should_receive(:[]).with(:notify).and_return false
+          expect(::Guard.options).to receive(:[]).with(:notify).and_return false
         end
 
         it 'does not try to add each available notification silently' do
-          Guard::Notifier.should_not_receive(:auto_detect_notification)
+          expect(Guard::Notifier).to_not receive(:auto_detect_notification)
           Guard::Notifier.turn_on
-          Guard::Notifier.should_not be_enabled
+          expect(Guard::Notifier).not_to be_enabled
         end
       end
     end
@@ -110,16 +118,17 @@ describe Guard::Notifier do
 
     it 'disables the notifications' do
       Guard::Notifier.turn_off
-      ENV['GUARD_NOTIFY'].should == 'false'
+      expect(ENV['GUARD_NOTIFY']).to eq 'false'
     end
 
     context 'when turned on with available notifications' do
       before do
-        Guard::Notifier.notifications = [{ :name => :gntp, :options => { } }]
+        Guard::Notifier.notifiers = [{ name: :tmux, options: {} }]
       end
 
-      it 'turns off each notification' do
-        ::Guard::Notifier::GNTP.should_receive(:turn_off)
+      it 'turns off each notifier' do
+        expect(Guard::Notifier::Tmux).to receive(:turn_off)
+
         Guard::Notifier.turn_off
       end
     end
@@ -130,13 +139,13 @@ describe Guard::Notifier do
 
     it 'disables the notifications when enabled' do
       ENV['GUARD_NOTIFY'] = 'true'
-      ::Guard::Notifier.should_receive(:turn_off)
+      expect(::Guard::Notifier).to receive(:turn_off)
       subject.toggle
     end
 
     it 'enables the notifications when disabled' do
       ENV['GUARD_NOTIFY'] = 'false'
-      ::Guard::Notifier.should_receive(:turn_on)
+      expect(::Guard::Notifier).to receive(:turn_on)
       subject.toggle
     end
   end
@@ -155,105 +164,80 @@ describe Guard::Notifier do
     end
   end
 
-  describe '.add_notification' do
+  describe '.add_notifier' do
     before do
-      Guard::Notifier.notifications = []
+      Guard::Notifier.clear_notifiers
     end
 
     context 'for an unknown notification library' do
       it 'does not add the library' do
-        Guard::Notifier.add_notification(:unknown)
-        Guard::Notifier.notifications.should be_empty
+        Guard::Notifier.add_notifier(:unknown)
+
+        expect(Guard::Notifier.notifiers).to be_empty
       end
     end
 
-    context 'for an notification library with the name :off' do
+    context 'for a notification library with the name :off' do
       it 'disables the notifier' do
         ENV['GUARD_NOTIFY'] = 'true'
-        Guard::Notifier.should be_enabled
-        Guard::Notifier.add_notification(:off)
-        Guard::Notifier.should_not be_enabled
+        expect(Guard::Notifier).to be_enabled
+        Guard::Notifier.add_notifier(:off)
+
+        expect(Guard::Notifier).not_to be_enabled
       end
     end
 
     context 'for a supported notification library' do
       context 'that is available' do
         it 'adds the notifier to the notifications' do
-          Guard::Notifier::GNTP.should_receive(:available?).and_return true
-          Guard::Notifier.add_notification(:gntp, { :param => 1 })
-          Guard::Notifier.notifications.should include({ :name => :gntp, :options => { :param => 1 } })
+          expect(Guard::Notifier::GNTP).to receive(:available?).with(param: 1).and_return(true)
+
+          Guard::Notifier.add_notifier(:gntp, param: 1)
+
+          expect(Guard::Notifier.notifiers).to eq [{ name: :gntp, options: { param: 1 } }]
         end
       end
 
       context 'that is not available' do
         it 'does not add the notifier to the notifications' do
-          Guard::Notifier::GNTP.should_receive(:available?).and_return false
-          Guard::Notifier.add_notification(:gntp, { :param => 1 })
-          Guard::Notifier.notifications.should_not include({ :name => :gntp, :options => { :param => 1 } })
+          expect(Guard::Notifier::GNTP).to receive(:available?).with(param: 1).and_return(false)
+          Guard::Notifier.add_notifier(:gntp, param: 1)
+
+          expect(Guard::Notifier.notifiers).to be_empty
         end
       end
     end
   end
 
   describe '.notify' do
+    before { Guard::Notifier.notifiers = [gntp, growl] }
+
     context 'when notifications are enabled' do
       before do
-        Guard::Notifier.notifications = [{ :name => :gntp, :options => { } }]
         Guard::Notifier.stub(:enabled?).and_return true
-      end
 
-      it 'uses the :success image when no image is defined' do
-        Guard::Notifier::GNTP.should_receive(:notify).with('success', 'Hi', 'Hi to everyone', /success.png/, { })
-        ::Guard::Notifier.notify('Hi to everyone', :title => 'Hi')
-      end
-
-      it 'uses "Guard" as title when no title is defined' do
-        Guard::Notifier::GNTP.should_receive(:notify).with('success', 'Guard', 'Hi to everyone', /success.png/, { })
-        ::Guard::Notifier.notify('Hi to everyone')
-      end
-
-      it 'sets the "failed" type for a :failed image' do
-        Guard::Notifier::GNTP.should_receive(:notify).with('failed', 'Guard', 'Hi to everyone', /failed.png/, { })
-        ::Guard::Notifier.notify('Hi to everyone', :image => :failed)
-      end
-
-      it 'sets the "pending" type for a :pending image' do
-        Guard::Notifier::GNTP.should_receive(:notify).with('pending', 'Guard', 'Hi to everyone', /pending.png/, { })
-        ::Guard::Notifier.notify('Hi to everyone', :image => :pending)
-      end
-
-      it 'sets the "success" type for a :success image' do
-        Guard::Notifier::GNTP.should_receive(:notify).with('success', 'Guard', 'Hi to everyone', /success.png/, { })
-        ::Guard::Notifier.notify('Hi to everyone', :image => :success)
-      end
-
-      it 'sets the "notify" type for a custom image' do
-        Guard::Notifier::GNTP.should_receive(:notify).with('notify', 'Guard', 'Hi to everyone', '/path/to/image.png', { })
-        ::Guard::Notifier.notify('Hi to everyone', :image => '/path/to/image.png')
-      end
-
-      it 'passes custom options to the notifier' do
-        Guard::Notifier::GNTP.should_receive(:notify).with('success', 'Guard', 'Hi to everyone', /success.png/, { :param => 'test' })
-        ::Guard::Notifier.notify('Hi to everyone', :param => 'test')
+        expect(Guard::Notifier::GNTP).to receive(:new).with(color: true).and_return(gntp_object)
+        expect(Guard::Notifier::Growl).to receive(:new).with({}).and_return(growl_object)
       end
 
       it 'sends the notification to multiple notifier' do
-        Guard::Notifier.notifications = [{ :name => :gntp, :options => { } }, { :name => :growl, :options => { } }]
-        Guard::Notifier::GNTP.should_receive(:notify)
-        Guard::Notifier::Growl.should_receive(:notify)
-        ::Guard::Notifier.notify('Hi to everyone')
+        Guard::Notifier.notifiers = [gntp, growl]
+        expect(gntp_object).to receive(:notify).with('Hi to everyone', foo: 'bar')
+        expect(growl_object).to receive(:notify).with('Hi to everyone', foo: 'bar')
+
+        ::Guard::Notifier.notify('Hi to everyone', foo: 'bar')
       end
     end
 
     context 'when notifications are disabled' do
       before do
-        Guard::Notifier.notifications = [{ :name => :gntp, :options => { } }, { :name => :growl, :options => { } }]
         Guard::Notifier.stub(:enabled?).and_return false
       end
 
       it 'does not send any notifications to a notifier' do
-        Guard::Notifier::GNTP.should_not_receive(:notify)
-        Guard::Notifier::Growl.should_not_receive(:notify)
+        expect(gntp).to_not receive(:notify)
+        expect(growl).to_not receive(:notify)
+
         ::Guard::Notifier.notify('Hi to everyone')
       end
     end

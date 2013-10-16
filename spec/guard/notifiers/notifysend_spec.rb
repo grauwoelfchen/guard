@@ -1,63 +1,97 @@
 require 'spec_helper'
 
 describe Guard::Notifier::NotifySend do
-
-  let(:fake_notifysend) do
-    Class.new do
-      def self.show(options) end
-    end
-  end
+  let(:notifier) { described_class.new }
 
   before do
-    stub_const 'NotifySend', :fake_notifysend
+    stub_const 'NotifySend', double
+  end
+
+  describe '.supported_hosts' do
+    it { expect(described_class.supported_hosts).to eq %w[linux freebsd openbsd sunos solaris] }
   end
 
   describe '.available?' do
-    context 'without the silent option' do
-      it 'shows an error message when not available on the host OS' do
-        ::Guard::UI.should_receive(:error).with 'The :notifysend notifier runs only on Linux, FreeBSD, OpenBSD and Solaris with the libnotify-bin package installed.'
-        RbConfig::CONFIG.should_receive(:[]).with('host_os').and_return 'darwin'
-        subject.available?
+    context 'host is not supported' do
+      before { RbConfig::CONFIG.stub(:[]).with('host_os').and_return('mswin') }
+
+      it 'do not check if the binary is available' do
+        expect(described_class).to_not receive(:_notifysend_binary_available?)
+
+        expect(described_class).to_not be_available
       end
     end
 
-    context 'with the silent option' do
-      it 'does not show an error message when not available on the host OS' do
-        ::Guard::UI.should_not_receive(:error).with 'The :notifysend notifier runs only on Linux, FreeBSD, OpenBSD and Solaris with the libnotify-bin package installed.'
-        RbConfig::CONFIG.should_receive(:[]).with('host_os').and_return 'darwin'
-        subject.available?(true)
+    context 'host is supported' do
+      before { RbConfig::CONFIG.stub(:[]).with('host_os').and_return('linux') }
+
+      it 'checks if the binary is available' do
+        expect(described_class).to receive(:_notifysend_binary_available?) { true }
+
+        expect(described_class).to be_available
       end
     end
   end
 
-  describe '.notify' do
+  describe '#notify' do
+    context 'with options passed at initialization' do
+      let(:notifier) { described_class.new(image: '/tmp/hello.png') }
+
+      it 'uses these options by default' do
+        notifier.should_receive(:system).with do |command, *arguments|
+          expect(command).to eql 'notify-send'
+          expect(arguments).to include '-i', '/tmp/hello.png'
+          expect(arguments).to include '-u', 'low'
+          expect(arguments).to include '-t', '3000'
+          expect(arguments).to include '-h', 'int:transient:1'
+        end
+
+        notifier.notify('Welcome to Guard')
+      end
+
+      it 'overwrites object options with passed options' do
+        notifier.should_receive(:system).with do |command, *arguments|
+          expect(command).to eql 'notify-send'
+          expect(arguments).to include '-i', '/tmp/welcome.png'
+          expect(arguments).to include '-u', 'low'
+          expect(arguments).to include '-t', '3000'
+          expect(arguments).to include '-h', 'int:transient:1'
+        end
+
+        notifier.notify('Welcome to Guard', image: '/tmp/welcome.png')
+      end
+    end
+
     context 'without additional options' do
       it 'shows the notification with the default options' do
-        subject.should_receive(:system).with do |command, *arguments|
-          command.should eql 'notify-send'
-          arguments.should include '-i', '/tmp/welcome.png'
-          arguments.should include '-u', 'low'
-          arguments.should include '-t', '3000'
-          arguments.should include '-h', 'int:transient:1'
+        notifier.should_receive(:system).with do |command, *arguments|
+          expect(command).to eql 'notify-send'
+          expect(arguments).to include '-i', '/tmp/welcome.png'
+          expect(arguments).to include '-u', 'low'
+          expect(arguments).to include '-t', '3000'
+          expect(arguments).to include '-h', 'int:transient:1'
         end
-        subject.notify('success', 'Welcome', 'Welcome to Guard', '/tmp/welcome.png', { })
+
+        notifier.notify('Welcome to Guard', image: '/tmp/welcome.png')
       end
     end
 
     context 'with additional options' do
       it 'can override the default options' do
-        subject.should_receive(:system).with do |command, *arguments|
-          command.should eql 'notify-send'
-          arguments.should include '-i', '/tmp/wait.png'
-          arguments.should include '-u', 'critical'
-          arguments.should include '-t', '5'
+        notifier.should_receive(:system).with do |command, *arguments|
+          expect(command).to eql 'notify-send'
+          expect(arguments).to include '-i', '/tmp/wait.png'
+          expect(arguments).to include '-u', 'critical'
+          expect(arguments).to include '-t', '5'
         end
-        subject.notify('pending', 'Waiting', 'Waiting for something', '/tmp/wait.png', {
-            :t => 5,
-            :u => :critical
-        })
+
+        notifier.notify('Waiting for something', type: :pending, image: '/tmp/wait.png',
+          t: 5,
+          u: :critical
+        )
       end
     end
 
   end
+
 end

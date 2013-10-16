@@ -1,5 +1,8 @@
 require 'lumberjack'
 
+require 'guard/options'
+require 'guard/ui/colors'
+
 module Guard
 
   # The UI class helps to format messages for the user. Everything that is logged
@@ -10,6 +13,7 @@ module Guard
   # processing, please just write it to STDOUT with `puts`.
   #
   module UI
+    include Colors
 
     class << self
 
@@ -17,8 +21,7 @@ module Guard
       #
       def logger
         @logger ||= begin
-          options = self.options.dup
-          Lumberjack::Logger.new(options.delete(:device) || $stderr, options)
+          Lumberjack::Logger.new(options.fetch(:device) { $stderr }, options)
         end
       end
 
@@ -27,7 +30,7 @@ module Guard
       # @return [Hash] the logger options
       #
       def options
-        @options ||= { :level => :info, :template => ':time - :severity - :message', :time_format => '%H:%M:%S' }
+        @options ||= ::Guard::Options.new(level: :info, template: ':time - :severity - :message', time_format: '%H:%M:%S')
       end
 
       # Set the logger options
@@ -38,7 +41,7 @@ module Guard
       # @option options [String] time_format the time format
       #
       def options=(options)
-        @options = options
+        @options = ::Guard::Options.new(options)
       end
 
       # Show an info message.
@@ -47,11 +50,8 @@ module Guard
       # @option options [Boolean] reset whether to clean the output before
       # @option options [String] plugin manually define the calling plugin
       #
-      def info(message, options = { })
-        filter(options[:plugin]) do |plugin|
-          reset_line if options[:reset]
-          self.logger.info(message, plugin)
-        end
+      def info(message, options = {})
+        _filtered_logger_message(message, :info, nil, options)
       end
 
       # Show a yellow warning message that is prefixed with WARNING.
@@ -60,11 +60,8 @@ module Guard
       # @option options [Boolean] reset whether to clean the output before
       # @option options [String] plugin manually define the calling plugin
       #
-      def warning(message, options = { })
-        filter(options[:plugin]) do |plugin|
-          reset_line if options[:reset]
-          self.logger.warn(color(message, :yellow), plugin)
-        end
+      def warning(message, options = {})
+        _filtered_logger_message(message, :warn, :yellow, options)
       end
 
       # Show a red error message that is prefixed with ERROR.
@@ -73,11 +70,8 @@ module Guard
       # @option options [Boolean] reset whether to clean the output before
       # @option options [String] plugin manually define the calling plugin
       #
-      def error(message, options = { })
-        filter(options[:plugin]) do |plugin|
-          reset_line if options[:reset]
-          self.logger.error(color(message, :red), plugin)
-        end
+      def error(message, options = {})
+        _filtered_logger_message(message, :error, :red, options)
       end
 
       # Show a red deprecation message that is prefixed with DEPRECATION.
@@ -87,11 +81,8 @@ module Guard
       # @option options [Boolean] reset whether to clean the output before
       # @option options [String] plugin manually define the calling plugin
       #
-      def deprecation(message, options = { })
-        filter(options[:plugin]) do |plugin|
-          reset_line if options[:reset]
-          self.logger.warn(color(message, :yellow), plugin)
-        end
+      def deprecation(message, options = {})
+        warning(message, options) if ::Guard.options[:show_deprecations]
       end
 
       # Show a debug message that is prefixed with DEBUG and a timestamp.
@@ -100,11 +91,8 @@ module Guard
       # @option options [Boolean] reset whether to clean the output before
       # @option options [String] plugin manually define the calling plugin
       #
-      def debug(message, options = { })
-        filter(options[:plugin]) do |plugin|
-          reset_line if options[:reset]
-          self.logger.debug(color(message, :yellow), plugin)
-        end
+      def debug(message, options = {})
+        _filtered_logger_message(message, :debug, :yellow, options)
       end
 
       # Reset a line.
@@ -133,23 +121,26 @@ module Guard
       # @param [String] action the action to show
       # @param [Hash] scopes hash with a guard or a group scope
       #
-      def action_with_scopes(action, scopes)
-        plugins = scopes[:plugins] || []
-        groups  = scopes[:groups] || []
+      def action_with_scopes(action, scope)
+        first_non_blank_scope = _first_non_blank_scope(scope)
+        scope_message = first_non_blank_scope.map(&:title).join(', ') unless first_non_blank_scope.nil?
 
-        if plugins.empty? && groups.empty?
-          plugins = ::Guard.scope[:plugins] || []
-          groups  = ::Guard.scope[:groups] || []
-        end
-
-        scope_message ||= plugins.join(',') unless plugins.empty?
-        scope_message ||= groups.join(',') unless groups.empty?
-        scope_message ||= 'all'
-
-        info "#{ action } #{ scope_message }"
+        info "#{ action } #{ scope_message || 'all' }"
       end
 
       private
+
+      # Returns the first non-blank scope by searching in the given `scope`
+      # hash and in Guard.scope. Returns nil if no non-blank scope is found.
+      #
+      def _first_non_blank_scope(scope)
+        [:plugins, :groups].each do |scope_name|
+          s = scope[scope_name] || ::Guard.scope[scope_name]
+          return s if !s.nil? && !s.empty?
+        end
+
+        nil
+      end
 
       # Filters log messages depending on either the
       # `:only`` or `:except` option.
@@ -158,13 +149,29 @@ module Guard
       # @yield When the message should be logged
       # @yieldparam [String] param the calling plugin name
       #
-      def filter(plugin)
-        only   = self.options[:only]
-        except = self.options[:except]
+      def _filter(plugin)
+        only   = options[:only]
+        except = options[:except]
         plugin = plugin || calling_plugin_name
 
         if (!only && !except) || (only && only.match(plugin)) || (except && !except.match(plugin))
           yield plugin
+        end
+      end
+
+      # Display a message of the type `method` and with the color `color_name`
+      # (no color by default) conditionnaly given a `plugin_name`.
+      #
+      # @param [String] plugin_name the calling plugin name
+      # @option options [Boolean] reset whether to clean the output before
+      # @option options [String] plugin manually define the calling plugin
+      #
+      def _filtered_logger_message(message, method, color_name, options = {})
+        message = color(message, color_name) if color_name
+
+        _filter(options[:plugin]) do |plugin|
+          reset_line if options[:reset]
+          logger.send(method, message, plugin)
         end
       end
 
@@ -177,16 +184,6 @@ module Guard
       def calling_plugin_name(depth = 2)
         name = /(guard\/[a-z_]*)(\/[a-z_]*)?.rb:/i.match(caller[depth])
         name ? name[1].split('/').map { |part| part.split(/[^a-z0-9]/i).map { |word| word.capitalize }.join }.join('::') : 'Guard'
-      end
-
-      # Reset a color sequence.
-      #
-      # @deprecated
-      # @param [String] text the text
-      #
-      def reset_color(text)
-        deprecation('UI.reset_color(text) is deprecated, please use color(text, ' ') instead.')
-        color(text, '')
       end
 
       # Checks if color output can be enabled.
@@ -242,57 +239,6 @@ module Guard
       end
 
     end
-
-    # Brighten the color
-    ANSI_ESCAPE_BRIGHT    = '1'
-
-    # Black foreground color
-    ANSI_ESCAPE_BLACK     = '30'
-
-    # Red foreground color
-    ANSI_ESCAPE_RED       = '31'
-
-    # Green foreground color
-    ANSI_ESCAPE_GREEN     = '32'
-
-    # Yellow foreground color
-    ANSI_ESCAPE_YELLOW    = '33'
-
-    # Blue foreground color
-    ANSI_ESCAPE_BLUE      = '34'
-
-    # Magenta foreground color
-    ANSI_ESCAPE_MAGENTA   = '35'
-
-    # Cyan foreground color
-    ANSI_ESCAPE_CYAN      = '36'
-
-    # White foreground color
-    ANSI_ESCAPE_WHITE     = '37'
-
-    # Black background color
-    ANSI_ESCAPE_BGBLACK   = '40'
-
-    # Red background color
-    ANSI_ESCAPE_BGRED     = '41'
-
-    # Green background color
-    ANSI_ESCAPE_BGGREEN   = '42'
-
-    # Yellow background color
-    ANSI_ESCAPE_BGYELLOW  = '43'
-
-    # Blue background color
-    ANSI_ESCAPE_BGBLUE    = '44'
-
-    # Magenta background color
-    ANSI_ESCAPE_BGMAGENTA = '45'
-
-    # Cyan background color
-    ANSI_ESCAPE_BGCYAN    = '46'
-
-    # White background color
-    ANSI_ESCAPE_BGWHITE   = '47'
 
   end
 end
