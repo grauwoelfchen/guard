@@ -108,7 +108,7 @@ module Guard
     #     guard :livereload
     #   end
     #
-    # @param [Symbol, String] name the group name called from the CLI
+    # @param [Symbol, String, Array<Symbol, String>] name the group name called from the CLI
     # @param [Hash] options the options accepted by the group
     # @yield a block where you can declare several Guard plugins
     #
@@ -116,18 +116,27 @@ module Guard
     # @see Guard.add_group
     # @see #guard
     #
-    def group(name, options = {})
-      raise ArgumentError, "'all' is not an allowed group name!" if name.to_sym == :all
+    def group(*args)
+      options = args.last.is_a?(Hash) ? args.pop : {}
+      groups = args
+
+      groups.each do |group|
+        raise ArgumentError, "'all' is not an allowed group name!" if group.to_sym == :all
+      end
 
       if block_given?
-        ::Guard.add_group(name, options)
-        @current_group = name
+        groups.each do |group|
+          ::Guard.add_group(group, options)
+        end
+
+        @current_groups ||= []
+        @current_groups.push(groups)
 
         yield
 
-        @current_group = nil
+        @current_groups.pop
       else
-        ::Guard::UI.error "No Guard plugins found in the group '#{ name }', please add at least one."
+        ::Guard::UI.error "No Guard plugins found in the group '#{ groups.join(', ') }', please add at least one."
       end
     end
 
@@ -158,12 +167,14 @@ module Guard
     def guard(name, options = {})
       @watchers  = []
       @callbacks = []
-      @current_group ||= :default
 
       yield if block_given?
 
-      options.merge!(group: @current_group, watchers: @watchers, callbacks: @callbacks)
-      ::Guard.add_plugin(name, options)
+      groups = @current_groups && @current_groups.last || [:default]
+      groups.each do |group|
+        options.merge!(group: group, watchers: @watchers, callbacks: @callbacks)
+        ::Guard.add_plugin(name, options)
+      end
     end
 
     # Defines a pattern to be watched in order to run actions on file modification.

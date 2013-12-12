@@ -330,7 +330,7 @@ $ bundle exec guard notifiers
 +-------------------+-----------+------+------------------------+-------------------+
 ```
 
-This shows if a notifier is available on the current system, it it's being used and the
+This shows if a notifier is available on the current system, if it's being used and the
 current options (which reflects your custom options merged into the default options).
 
 Interactions
@@ -478,13 +478,35 @@ group :docs do
 end
 ```
 
+Groups can be nested, reopened and can take multiple names to assign its plugin to multiple groups:
+
+```ruby
+group :desktop do
+  guard 'livereload' do
+    watch(%r{desktop/.+\.html})
+  end
+
+  group :mobile do
+    guard 'livereload' do
+      watch(%r{mobile/.+\.html})
+    end
+  end
+end
+
+group :mobile, :desktop do
+  guard 'livereload' do
+    watch(%r{both/.+\.html})
+  end
+end
+```
+
 Groups to be run can be specified with the Guard DSL option `--group` (or `-g`):
 
 ```bash
 $ bundle exec guard -g specs
 ```
 
-Guard plugins that don't belong to a group are considered global and are always run.
+Plugins that don't belong to a group are part of the `default` group.
 
 Another neat use of groups is to group dependant plugins and stop processing if one fails. In order
 to make this work, the group needs to have the `halt_on_fail` option enabled and the Guard plugin
@@ -718,7 +740,7 @@ Please try to follow these simple rules:
 #### Core Team
 
 * [Michael Kessler](https://github.com/netzpirat) ([@netzpirat](http://twitter.com/netzpirat), [mksoft.ch](https://mksoft.ch))
-* [Rémy Coutable](https://github.com/rymai) ([@rymai](http://twitter.com/rymai), [rym.ai](http://rym.ai))
+* [Rémy Coutable](https://github.com/rymai)
 * [Thibaud Guillaume-Gentil](https://github.com/thibaudgg) ([@thibaudgg](http://twitter.com/thibaudgg), [thibaud.me](http://thibaud.me/))
 
 #### Contributors

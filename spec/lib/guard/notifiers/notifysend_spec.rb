@@ -35,7 +35,7 @@ describe Guard::Notifier::NotifySend do
 
   describe '#notify' do
     context 'with options passed at initialization' do
-      let(:notifier) { described_class.new(image: '/tmp/hello.png') }
+      let(:notifier) { described_class.new(image: '/tmp/hello.png', silent: true) }
 
       it 'uses these options by default' do
         notifier.should_receive(:system).with do |command, *arguments|
@@ -59,6 +59,15 @@ describe Guard::Notifier::NotifySend do
         end
 
         notifier.notify('Welcome to Guard', image: '/tmp/welcome.png')
+      end
+
+      it 'uses the title provided in the options' do
+        notifier.should_receive(:system).with do |command, *arguments|
+          expect(command).to eql 'notify-send'
+          expect(arguments).to include 'Welcome to Guard'
+          expect(arguments).to include 'test title'
+        end
+        notifier.notify('Welcome to Guard', title: 'test title')
       end
     end
 
