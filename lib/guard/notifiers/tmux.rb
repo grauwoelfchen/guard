@@ -29,6 +29,8 @@ module Guard
         display_message:        false,
         default_message_format: '%s - %s',
         default_message_color:  'white',
+        display_title:          false,
+        default_title_format:   '%s - %s',
         line_separator:         ' - ',
         change_color:           true,
         color_location:         'status-left-bg'
@@ -83,7 +85,7 @@ module Guard
       # @option opts [String] image the path to the notification image
       # @option opts [Boolean] change_color whether to show a color
       #   notification
-      # @option opts [String] color_location the location where to draw the
+      # @option opts [String,Array] color_location the location where to draw the
       #   color notification
       # @option opts [Boolean] display_message whether to display a message
       #   or not
@@ -93,14 +95,49 @@ module Guard
         opts.delete(:image)
 
         if opts.fetch(:change_color, DEFAULTS[:change_color])
-          color_location = opts.fetch(:color_location, DEFAULTS[:color_location])
+          color_locations = Array(opts.fetch(:color_location, DEFAULTS[:color_location]))
           color = tmux_color(opts[:type], opts)
 
-          _run_client "set #{ color_location } #{ color }"
+          color_locations.each do |color_location|
+            _run_client "set -q #{ color_location } #{ color }"
+          end
+        end
+
+        type  = opts.delete(:type).to_s
+        title = opts.delete(:title)
+
+        if opts.fetch(:display_title, DEFAULTS[:display_title])
+          display_title(type, title, message, opts)
         end
 
         if opts.fetch(:display_message, DEFAULTS[:display_message])
-          display_message(opts.delete(:type).to_s, opts.delete(:title), message, opts)
+          display_message(type, title, message, opts)
+        end
+      end
+
+      # Displays a message in the title bar of the terminal.
+      #
+      # @param [String] title the notification title
+      # @param [String] message the notification message body
+      # @param [Hash] options additional notification library options
+      # @option options [String] success_message_format a string to use as
+      #   formatter for the success message.
+      # @option options [String] failed_message_format a string to use as
+      #   formatter for the failed message.
+      # @option options [String] pending_message_format a string to use as
+      #   formatter for the pending message.
+      # @option options [String] default_message_format a string to use as
+      #   formatter when no format per type is defined.
+      #
+      def display_title(type, title, message, opts = {})
+        title_format   = opts.fetch("#{ type }_title_format".to_sym, opts.fetch(:default_title_format, DEFAULTS[:default_title_format]))
+        teaser_message = message.split("\n").first
+        display_title  = title_format % [title, teaser_message]
+
+        if _tmux_version >= 1.7
+          _run_client "set-option -q set-titles-string '#{ display_title }'"
+        else
+          _run_client "set-option set-titles-string '#{ display_title }'"
         end
       end
 
@@ -142,9 +179,9 @@ module Guard
         formatted_message = message.split("\n").join(separator)
         display_message = message_format % [title, formatted_message]
 
-        _run_client "set display-time #{ display_time * 1000 }"
-        _run_client "set message-fg #{ message_color }"
-        _run_client "set message-bg #{ color }"
+        _run_client "set -q display-time #{ display_time * 1000 }"
+        _run_client "set -q message-fg #{ message_color }"
+        _run_client "set -q message-bg #{ color }"
         _run_client "display-message '#{ display_message }'"
       end
 
@@ -174,8 +211,6 @@ module Guard
 
           @options_stored = true
         end
-
-        _run_client 'set quiet on'
       end
 
       # Notification stopping. Restore the previous Tmux state
@@ -186,15 +221,13 @@ module Guard
         if @options_stored
           @options_store.each do |key, value|
             if value
-              _run_client "set #{ key } #{ value }"
+              _run_client "set -q #{ key } #{ value }"
             else
-              _run_client "set -u #{ key }"
+              _run_client "set -q -u #{ key }"
             end
           end
           _reset_options_store
         end
-
-        _run_client 'set quiet off'
       end
 
       def options_store
@@ -225,6 +258,10 @@ module Guard
           'message-fg'      => nil,
           'display-time'    => nil
         }
+      end
+
+      def _tmux_version
+        @tmux_version ||= `tmux -V`.chomp.gsub(/[^0-9.]/,'').to_f
       end
 
     end

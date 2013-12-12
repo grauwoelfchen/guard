@@ -86,7 +86,9 @@ module Guard
       private
 
       def _run_cmd(*args)
-        IO.popen(args).readlines
+        p = IO.popen(args)
+        p.readlines
+        p.close
       end
 
     end

@@ -92,7 +92,10 @@ module Guard
     # Turn notifications on. If no notifications are defined in the `Guardfile`
     # Guard auto detects the first available library.
     #
-    def turn_on
+    # @param [Hash] options the turn_on options
+    # @option options [Boolean] silent disable any logging
+    #
+    def turn_on(opts = {})
       _auto_detect_notification if notifiers.empty? && (!::Guard.options || ::Guard.options[:notify])
 
       if notifiers.empty?
@@ -100,7 +103,7 @@ module Guard
       else
         notifiers.each do |notifier|
           notifier_class = _get_notifier_module(notifier[:name])
-          ::Guard::UI.info "Guard is using #{ notifier_class.title } to send notifications."
+          ::Guard::UI.info "Guard is using #{ notifier_class.title } to send notifications." unless opts[:silent]
 
           notifier_class.turn_on if notifier_class.respond_to?(:turn_on)
         end
@@ -173,9 +176,10 @@ module Guard
         notifier = _get_notifier_module(notifier[:name]).new(notifier[:options])
 
         begin
-          notifier.notify(message, opts)
+          notifier.notify(message, opts.dup)
         rescue Exception => e
           ::Guard::UI.error "Error sending notification with #{ notifier.name }: #{ e.message }"
+          ::Guard::UI.debug e.backtrace.join("\n")
         end
       end
     end

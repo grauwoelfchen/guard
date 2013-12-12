@@ -13,10 +13,14 @@ end
 # installed on Travis CI.
 #
 group :development do
-  gem 'yard'
-  gem 'redcarpet'
-  gem 'pimpmychangelog'
+  gem 'yard', require: false
+  gem 'redcarpet', require: false
   gem 'guard-ronn', require: false
+
+  # Used for release
+  gem 'gems', require: false
+  gem 'netrc', require: false
+  gem 'octokit', require: false
 
   require 'rbconfig'
 
@@ -24,11 +28,11 @@ group :development do
     gem 'ruby_gntp', require: false
 
   elsif RbConfig::CONFIG['target_os'] =~ /linux/i
-    gem 'libnotify', '>= 0.8.2', require: false
+    gem 'libnotify', require: false
 
   elsif RbConfig::CONFIG['target_os'] =~ /mswin|mingw/i
     gem 'win32console', require: false
-    gem 'rb-notifu', '>= 0.0.4', require: false
+    gem 'rb-notifu', require: false
   end
 end
 
