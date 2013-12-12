@@ -52,13 +52,15 @@ module Guard
       end
 
       def stumpish_color_with(opts)
-        case opts[:type]
+        case opts[:type] || opts[:image]
         when :success
           opts[:success] || DEFAULTS[:success]
         when :failed
           opts[:failed]  || DEFAULTS[:failed]
         when :pending
           opts[:pending] || DEFAULTS[:pending]
+        when :notify
+          opts[:notify]  || DEFAULTS[:pending]
         else
           opts[:failed]  || DEFAULTS[:failed]
         end
@@ -66,15 +68,17 @@ module Guard
 
       def description(message, opts)
         mood = \
-          case opts[:type]
+          case opts[:type] || opts[:image]
           when :success
             ":D"
           when :failed
             ":'("
           when :pending
             ":p"
-          else
+          when :notify
             ":)"
+          else
+            ":|"
           end
         "\" Guard: \n #{opts[:title]} #{opts[:type]} #{mood} \n #{message.gsub("\n", "\n ")}  \"\n"
       end
